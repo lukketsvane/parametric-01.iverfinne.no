@@ -13,10 +13,10 @@ import type { EngineJob, EngineResult } from "@/lib/engine-worker"
 // slab workers across every available core, so desktops can afford grids
 // fine enough for paper-thin sheets. Phones get a lighter, single-worker
 // refine so regeneration never feels stuck.
-const PREVIEW_RES = 96
-const REFINE_RES_MOBILE = 144
-const REFINE_RES = 240
-const REFINE_RES_HI = 300
+const PREVIEW_RES = 104
+const REFINE_RES_MOBILE = 152
+const REFINE_RES = 264
+const REFINE_RES_HI = 360
 const REFINE_DELAY = 240
 
 const newWorker = () =>
@@ -131,7 +131,7 @@ export function EngineMesh({
       return
     }
     const cores = typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4
-    const lanes = Math.min(8, Math.max(1, cores - 1))
+    const lanes = Math.min(10, Math.max(1, cores - 1))
     const chunk = Math.max(4, Math.ceil(meta.nz / lanes))
     const jobs: { z0: number; z1: number }[] = []
     for (let z0 = 0; z0 < meta.nz; z0 += chunk)

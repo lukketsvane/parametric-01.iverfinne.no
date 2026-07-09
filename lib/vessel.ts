@@ -210,7 +210,7 @@ export function makeSampler(p: Params, res: number): Sampler {
 
   const spanXZ = 2 * maxOut + 0.12
   const spanY = H + 0.16
-  const cell = Math.max(spanXZ, spanY) / Math.max(32, Math.min(320, res))
+  const cell = Math.max(spanXZ, spanY) / Math.max(32, Math.min(420, res))
   const nx = Math.ceil(spanXZ / cell) + 1
   const ny = Math.ceil(spanY / cell) + 1
   const nz = nx
@@ -220,10 +220,10 @@ export function makeSampler(p: Params, res: number): Sampler {
   const meta: GridMeta = { nx, ny, nz, ox, oy, oz, cell }
 
   // the thinnest structure the grid can carry without tearing open
-  const ft = Math.max(p.finThick, cell * 1.75)
-  const rt = Math.max(p.ringThick, cell * 1.75)
+  const ft = Math.max(p.finThick, cell * 1.6)
+  const rt = Math.max(p.ringThick, cell * 1.6)
   const shellT = Math.max(0.05, ft * 1.2)
-  const wall = Math.max(p.wall, cell * 2.4)
+  const wall = Math.max(p.wall, cell * 2.2)
   const floorT = Math.max(0.09, wall * 1.2)
 
   // seeded phases for the periodic edge harmonics
