@@ -2,16 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react"
 import {
-  CANDLE_SPECS,
   DEFAULT_PARAMS,
-  FAMILIES,
+  NUDGE_PARAMS,
   PARAM_RANGES,
-  type HolderParams,
+  PRESETS,
+  type Params,
   type ParamKey,
-} from "@/lib/candle-holder"
-import { HolderViewer } from "./holder-viewer"
+} from "@/lib/engine"
+import { Viewer } from "./viewer"
 import { ControlsPanel } from "./controls-panel"
-import type { NudgeKey } from "./gesture-params"
+import type { NudgeAxis } from "./gesture-params"
 
 // pixels of two-finger scroll to sweep a parameter's full range
 const NUDGE_RANGE_PX = 420
@@ -43,7 +43,7 @@ function useIsDesktop() {
 }
 
 export function Studio() {
-  const [params, setParams] = useState<HolderParams>(DEFAULT_PARAMS)
+  const [params, setParams] = useState<Params>(DEFAULT_PARAMS)
   const [hiDetail, setHiDetail] = useState(false)
   const [mounted, setMounted] = useState(false)
   const dark = useSystemDark()
@@ -51,7 +51,7 @@ export function Studio() {
 
   // avoid SSR of the WebGL canvas; restore a shared design from the URL.
   // The hash is untrusted input — every field is validated and clamped so
-  // no crafted URL can push NaN or hostile values into the SDF field.
+  // no crafted URL can push NaN or hostile values into the engine.
   useEffect(() => {
     setMounted(true)
     try {
@@ -71,14 +71,8 @@ export function Studio() {
             if (typeof obj.seed === "number" && Number.isFinite(obj.seed)) {
               next.seed = Math.floor(obj.seed)
             }
-            if (typeof obj.preset === "string" && FAMILIES.includes(obj.preset)) {
+            if (typeof obj.preset === "string" && PRESETS.includes(obj.preset)) {
               next.preset = obj.preset
-            }
-            if (
-              typeof obj.candle === "string" &&
-              Object.prototype.hasOwnProperty.call(CANDLE_SPECS, obj.candle)
-            ) {
-              next.candle = obj.candle as HolderParams["candle"]
             }
             return next
           })
@@ -101,8 +95,10 @@ export function Studio() {
     return () => window.clearTimeout(id)
   }, [params])
 
-  // two-finger scroll: vertical sets height, horizontal sets radius
-  const nudge = useCallback((key: NudgeKey, deltaPx: number) => {
+  // two-finger scroll sweeps whichever parameters the engine mapped
+  const nudge = useCallback((axis: NudgeAxis, deltaPx: number) => {
+    const key = NUDGE_PARAMS[axis]
+    if (key === undefined) return
     setParams((p) => {
       const r = PARAM_RANGES[key]
       const v = Math.min(
@@ -120,7 +116,7 @@ export function Studio() {
     <main className="fixed inset-0 overflow-hidden bg-white dark:bg-black">
       <div className="absolute inset-0">
         {mounted && (
-          <HolderViewer
+          <Viewer
             params={params}
             dark={dark}
             hiDetail={detailOn}

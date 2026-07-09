@@ -3,31 +3,30 @@
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
 import { useThree } from "@react-three/fiber"
-import { buildHolderArrays, type HolderParams } from "@/lib/candle-holder"
+import { PRESET_COLORS, type Params } from "@/lib/engine"
+import { buildVesselArrays } from "@/lib/vessel"
 import { arraysToGeometry } from "@/lib/geometry"
-import type { HolderJob, HolderResult } from "@/lib/holder-worker"
+import type { EngineJob, EngineResult } from "@/lib/engine-worker"
 
-// resolution is expressed in cells per tube diameter — the detail that
-// matters. Coarse while dragging, refined once the parameters settle.
-// Phones get a lighter refine so regeneration never feels stuck.
-// the calmer shuffle coherence rules made builds ~30% cheaper, which
-// buys a crisper refine at the same wall-clock — sharper tube joints
-const PREVIEW_CPT = 3.6
-const REFINE_CPT_MOBILE = 6.5
-const REFINE_CPT = 9
-const REFINE_CPT_HI = 12
+// target grid cells along the largest axis — coarse while dragging,
+// refined once the parameters settle. Phones get a lighter refine so
+// regeneration never feels stuck.
+const PREVIEW_RES = 84
+const REFINE_RES_MOBILE = 132
+const REFINE_RES = 176
+const REFINE_RES_HI = 220
 const REFINE_DELAY = 240
 
 const newWorker = () =>
-  new Worker(new URL("../lib/holder-worker.ts", import.meta.url))
+  new Worker(new URL("../lib/engine-worker.ts", import.meta.url))
 
-export function HolderMesh({
+export function EngineMesh({
   params,
   hiDetail,
   mobile,
   onFit,
 }: {
-  params: HolderParams
+  params: Params
   hiDetail: boolean
   mobile: boolean
   onFit?: (radius: number, centerY: number) => void
@@ -42,7 +41,7 @@ export function HolderMesh({
   // switching presets or dragging never waits behind an old build
   const previewWorker = useRef<Worker | null>(null)
   const previewBusy = useRef(false)
-  const previewPending = useRef<HolderJob | null>(null)
+  const previewPending = useRef<EngineJob | null>(null)
   const refineWorker = useRef<Worker | null>(null)
   const workersDead = useRef(false)
 
@@ -52,7 +51,7 @@ export function HolderMesh({
       geo.dispose()
       return
     }
-    // stand the holder on the floor plane at y = 0
+    // stand the vessel on the floor plane at y = 0
     geo.computeBoundingBox()
     const bb = geo.boundingBox
     if (bb) {
@@ -68,22 +67,22 @@ export function HolderMesh({
     invalidate()
   }
 
-  const applyResult = (e: MessageEvent<HolderResult>) => {
+  const applyResult = (e: MessageEvent<EngineResult>) => {
     const { gen, positions, normals, indices } = e.data
     if (gen === genRef.current) {
       swap(arraysToGeometry({ positions, normals, indices }))
     }
   }
 
-  const postPreview = (job: HolderJob) => {
+  const postPreview = (job: EngineJob) => {
     if (workersDead.current) {
-      swap(arraysToGeometry(buildHolderArrays(job.params, job.cellsPerTube)))
+      swap(arraysToGeometry(buildVesselArrays(job.params, job.res)))
       return
     }
     if (!previewWorker.current) {
       try {
         const w = newWorker()
-        w.onmessage = (e: MessageEvent<HolderResult>) => {
+        w.onmessage = (e: MessageEvent<EngineResult>) => {
           applyResult(e)
           const pending = previewPending.current
           previewPending.current = null
@@ -96,7 +95,7 @@ export function HolderMesh({
         previewWorker.current = w
       } catch {
         workersDead.current = true
-        swap(arraysToGeometry(buildHolderArrays(job.params, job.cellsPerTube)))
+        swap(arraysToGeometry(buildVesselArrays(job.params, job.res)))
         return
       }
     }
@@ -108,13 +107,13 @@ export function HolderMesh({
     }
   }
 
-  const postRefine = (job: HolderJob) => {
+  const postRefine = (job: EngineJob) => {
     if (workersDead.current) return
     // kill any in-flight refine — its result would be stale anyway
     refineWorker.current?.terminate()
     try {
       const w = newWorker()
-      w.onmessage = (e: MessageEvent<HolderResult>) => {
+      w.onmessage = (e: MessageEvent<EngineResult>) => {
         applyResult(e)
         w.terminate()
         if (refineWorker.current === w) refineWorker.current = null
@@ -141,15 +140,15 @@ export function HolderMesh({
 
   useEffect(() => {
     const gen = ++genRef.current
-    postPreview({ gen, params, cellsPerTube: PREVIEW_CPT })
-    const refineCpt = hiDetail
-      ? REFINE_CPT_HI
+    postPreview({ gen, params, res: PREVIEW_RES })
+    const refineRes = hiDetail
+      ? REFINE_RES_HI
       : mobile
-        ? REFINE_CPT_MOBILE
-        : REFINE_CPT
+        ? REFINE_RES_MOBILE
+        : REFINE_RES
     const id = window.setTimeout(() => {
       if (gen === genRef.current) {
-        postRefine({ gen, params, cellsPerTube: refineCpt })
+        postRefine({ gen, params, res: refineRes })
       }
     }, REFINE_DELAY)
     return () => window.clearTimeout(id)
@@ -161,16 +160,18 @@ export function HolderMesh({
     return () => mesh?.geometry?.dispose()
   }, [])
 
+  const tint = PRESET_COLORS[params.preset] ?? "#f3f0e9"
+
   return (
     <mesh ref={meshRef} castShadow receiveShadow>
-      {/* glazed ceramic: warm off-white body under a wet clearcoat */}
+      {/* matte slip-cast body under a faint sheen, tinted per family */}
       <meshPhysicalMaterial
-        color="#f3f0e9"
-        roughness={0.18}
+        color={tint}
+        roughness={0.62}
         metalness={0}
-        clearcoat={1}
-        clearcoatRoughness={0.22}
-        envMapIntensity={1.05}
+        clearcoat={0.25}
+        clearcoatRoughness={0.6}
+        envMapIntensity={0.7}
       />
     </mesh>
   )
