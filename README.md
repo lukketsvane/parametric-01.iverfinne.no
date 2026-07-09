@@ -1,1 +1,1 @@
-# parametric-01.iverfinne.no
+# parametric.iverfinne.no
