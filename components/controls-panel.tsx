@@ -9,67 +9,16 @@ import {
   Download,
 } from "lucide-react"
 import {
-  CANDLE_SPECS,
-  FAMILIES,
   PARAM_RANGES,
+  PRESETS,
+  SECTIONS,
   genParams,
   randomizeParams,
   randomSeed,
-  type CandleType,
   type ParamKey,
-  type HolderParams,
-} from "@/lib/candle-holder"
+  type Params,
+} from "@/lib/engine"
 import { downloadSTL } from "@/lib/export-stl"
-
-type Section = { title: string; keys: { key: ParamKey; label: string }[] }
-
-const SECTIONS: Section[] = [
-  {
-    title: "Symmetry",
-    keys: [{ key: "symmetry", label: "Order" }],
-  },
-  {
-    title: "Growth",
-    keys: [
-      { key: "depth", label: "Depth" },
-      { key: "branches", label: "Branches" },
-      { key: "branchSpread", label: "Spread" },
-      { key: "length", label: "Length" },
-      { key: "decay", label: "Decay" },
-      { key: "gravity", label: "Gravity" },
-      { key: "outward", label: "Outward" },
-      { key: "curl", label: "Curl" },
-      { key: "wiggle", label: "Wiggle" },
-      { key: "loopiness", label: "Loops" },
-      { key: "rings", label: "Rings" },
-      { key: "crown", label: "Crown" },
-      { key: "levels", label: "Levels" },
-    ],
-  },
-  {
-    title: "Body",
-    keys: [
-      { key: "height", label: "Height" },
-      { key: "spread", label: "Radius" },
-      { key: "tube", label: "Tube" },
-      { key: "taper", label: "Taper" },
-      { key: "blend", label: "Blend" },
-      { key: "bulb", label: "Bulbs" },
-      { key: "open", label: "Open" },
-      { key: "spikes", label: "Spikes" },
-      { key: "shell", label: "Shell" },
-    ],
-  },
-  {
-    title: "Cup",
-    keys: [
-      { key: "cup", label: "Cup" },
-      { key: "cupPos", label: "Level" },
-      { key: "dish", label: "Dish" },
-      { key: "rimWave", label: "Rim" },
-    ],
-  },
-]
 
 // monochrome controls — solid black/white ink, thin subtle hairline outlines
 const HAIR = "border-black/15 dark:border-white/20"
@@ -140,13 +89,13 @@ export function ControlsPanel({
   onToggleDetail,
   onChange,
 }: {
-  params: HolderParams
+  params: Params
   isDesktop: boolean
   hiDetail: boolean
   onToggleDetail: () => void
-  onChange: (p: HolderParams) => void
+  onChange: (p: Params) => void
 }) {
-  // collapsed → half (preset, chips, candle) → full (every parameter)
+  // collapsed → half (preset, chips) → full (every parameter)
   const [mode, setMode] = useState<"collapsed" | "half" | "full">("collapsed")
   const open = mode !== "collapsed"
   // tapped-locked parameters survive randomize untouched
@@ -155,7 +104,7 @@ export function ControlsPanel({
   // tapping the seed number next to the dropdown
   const [presetLocked, setPresetLocked] = useState(false)
 
-  const set = (patch: Partial<HolderParams>) => onChange({ ...params, ...patch })
+  const set = (patch: Partial<Params>) => onChange({ ...params, ...patch })
 
   const toggleLock = (key: ParamKey) =>
     setLocked((prev) => {
@@ -168,12 +117,8 @@ export function ControlsPanel({
   const shuffle = () => {
     const preset = presetLocked
       ? params.preset
-      : FAMILIES[Math.floor(Math.random() * FAMILIES.length)]
+      : PRESETS[Math.floor(Math.random() * PRESETS.length)]
     const next = randomizeParams(randomSeed(), preset)
-    // the candle is a functional choice, never randomized away
-    next.candle = params.candle
-    // tealight holders stay low regardless of which preset was rolled
-    if (next.candle === "telys") next.height = Math.min(next.height, 1.25)
     for (const k of locked) next[k] = params[k]
     onChange(next)
   }
@@ -190,7 +135,7 @@ export function ControlsPanel({
               aria-label="Preset"
               className="h-full appearance-none rounded-full bg-transparent pl-3.5 pr-8 text-xs font-medium text-black outline-none dark:text-white [&>option]:bg-white dark:[&>option]:bg-black"
             >
-              {FAMILIES.map((fam) => (
+              {PRESETS.map((fam) => (
                 <option key={fam} value={fam}>
                   {fam.charAt(0).toUpperCase() + fam.slice(1)}
                 </option>
@@ -220,7 +165,7 @@ export function ControlsPanel({
 
           <button
             onClick={shuffle}
-            aria-label="Randomize holder"
+            aria-label="Randomize design"
             className={ICON_BTN_SOLID}
           >
             <Shuffle className="h-4 w-4" strokeWidth={2.2} />
@@ -252,16 +197,9 @@ export function ControlsPanel({
           <div className="max-h-[56vh] overflow-y-auto px-4 pb-4">
             <div className="mb-3 flex flex-wrap gap-1.5">
               <button
-                onClick={() => set({ mirror: params.mirror >= 0.5 ? 0 : 1 })}
-                className={chipClass(params.mirror >= 0.5)}
-                title="Dihedral symmetry: mirror each wedge"
-              >
-                mirror
-              </button>
-              <button
                 onClick={() => set({ seed: randomSeed() })}
                 className={chipClass(false)}
-                title="New growth seed, same parameters"
+                title="New seed, same parameters"
               >
                 reseed
               </button>
@@ -293,25 +231,6 @@ export function ControlsPanel({
               </button>
             )}
 
-            {/* which real candle the socket is built for */}
-            <div className="mb-1">
-              <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
-                Lys
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(CANDLE_SPECS) as CandleType[]).map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => set({ candle: c })}
-                    className={chipClass(params.candle === c)}
-                    title={CANDLE_SPECS[c].label}
-                  >
-                    {CANDLE_SPECS[c].label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* half ↔ full: every parameter lives behind this expander */}
             <button
               onClick={() => setMode(mode === "full" ? "half" : "full")}
@@ -331,35 +250,25 @@ export function ControlsPanel({
               )}
             </button>
 
-            {mode === "full" && (
-              <>
-                {SECTIONS.map(({ title, keys }) => (
-                  <div key={title} className="mb-2">
-                    <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
-                      {title}
-                    </p>
-                    {keys.map(({ key, label }) => (
-                      <Row
-                        key={key}
-                        label={label}
-                        value={params[key]}
-                        range={PARAM_RANGES[key]}
-                        locked={locked.has(key)}
-                        onChange={(v) => set({ [key]: v } as Partial<HolderParams>)}
-                        onToggleLock={() => toggleLock(key)}
-                      />
-                    ))}
-                  </div>
-                ))}
-
-                <p className="pt-2 text-center text-[10px] uppercase tracking-widest text-black/60 dark:text-white/60">
-                  grown from symmetries · booleans · lattices
-                  <br />
-                  stl in mm · sokkel{" "}
-                  {params.candle === "telys" ? "Ø41 × 12 mm" : "Ø23 × 28 mm"}
-                </p>
-              </>
-            )}
+            {mode === "full" &&
+              SECTIONS.map(({ title, keys }) => (
+                <div key={title} className="mb-2">
+                  <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
+                    {title}
+                  </p>
+                  {keys.map(({ key, label }) => (
+                    <Row
+                      key={key}
+                      label={label}
+                      value={params[key]}
+                      range={PARAM_RANGES[key]}
+                      locked={locked.has(key)}
+                      onChange={(v) => set({ [key]: v } as Partial<Params>)}
+                      onToggleLock={() => toggleLock(key)}
+                    />
+                  ))}
+                </div>
+              ))}
           </div>
         )}
       </div>

@@ -1,12 +1,12 @@
 import * as THREE from "three"
-import type { HolderMeshArrays } from "./candle-holder"
+import type { VesselMeshArrays } from "./vessel"
 
-/** Wrap raw builder arrays (with SDF-gradient normals) in a geometry. */
+/** Wrap raw builder arrays in an indexed BufferGeometry. */
 export function arraysToGeometry({
   positions,
   normals,
   indices,
-}: HolderMeshArrays): THREE.BufferGeometry {
+}: VesselMeshArrays): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry()
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3))
   geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3))

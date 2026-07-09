@@ -1,18 +1,19 @@
 import * as THREE from "three"
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js"
-import { MM_PER_UNIT, buildHolderArrays, type HolderParams } from "./candle-holder"
+import { MM_PER_UNIT, type Params } from "./engine"
+import { buildVesselArrays } from "./vessel"
 import { arraysToGeometry } from "./geometry"
 
 // STL exports are meshed once at high resolution regardless of the live
 // viewport quality, so downloads are always print-grade.
-const EXPORT_CELLS_PER_TUBE = 10
+const EXPORT_RES = 256
 
 /**
- * Build the current holder, encode it as a binary STL in millimeters
+ * Build the current vessel, encode it as a binary STL in millimeters
  * (slicers assume mm), standing on z = 0, and download it.
  */
-export function downloadSTL(params: HolderParams): void {
-  const geo = arraysToGeometry(buildHolderArrays(params, EXPORT_CELLS_PER_TUBE))
+export function downloadSTL(params: Params): void {
+  const geo = arraysToGeometry(buildVesselArrays(params, EXPORT_RES))
   geo.scale(MM_PER_UNIT, MM_PER_UNIT, MM_PER_UNIT)
   // stand on the build plate: z up, base at z = 0
   geo.rotateX(Math.PI / 2)
@@ -26,7 +27,7 @@ export function downloadSTL(params: HolderParams): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = `candleholder-${params.candle}-${params.preset}-${params.seed}.stl`
+  a.download = `vessel-${params.preset}-${params.seed}.stl`
   document.body.appendChild(a)
   a.click()
   a.remove()

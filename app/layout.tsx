@@ -3,34 +3,32 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://parametric.iverfinne.no'),
-  title: 'Candle Holder Builder — iverfinne.no',
+  metadataBase: new URL('https://parametric-01.iverfinne.no'),
+  title: 'Parametric Studio — iverfinne.no',
   description:
-    'A parametric builder for organic candle stick holders — symmetries, booleans and lattices meshed into printable ceramic-like forms.',
+    'An interactive studio for parametric 3D forms — every design a point in one parameter space.',
   openGraph: {
-    title: 'Candle Holder Builder',
+    title: 'Parametric Studio',
     description:
-      'A parametric builder for organic candle stick holders — symmetries, booleans and lattices meshed into printable ceramic-like forms.',
-    url: 'https://parametric.iverfinne.no',
-    siteName: 'Candle Holder Builder',
-    images: [{ url: '/og.png', width: 1300, height: 630, alt: 'A glossy white ruffled ceramic tealight holder on black' }],
+      'An interactive studio for parametric 3D forms — every design a point in one parameter space.',
+    url: 'https://parametric-01.iverfinne.no',
+    siteName: 'Parametric Studio',
     type: 'website',
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Candle Holder Builder',
+    card: 'summary',
+    title: 'Parametric Studio',
     description:
-      'Parametric organic candle holders — symmetries, booleans and lattices.',
-    images: ['/og.png'],
+      'An interactive studio for parametric 3D forms — every design a point in one parameter space.',
   },
   generator: 'v0.app',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Candle Holder Builder',
+    title: 'Parametric Studio',
   },
-  applicationName: 'Candle Holder Builder',
+  applicationName: 'Parametric Studio',
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },

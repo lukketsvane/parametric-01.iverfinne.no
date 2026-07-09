@@ -9,9 +9,9 @@ import {
 } from "@react-three/drei"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import * as THREE from "three"
-import type { HolderParams } from "@/lib/candle-holder"
-import { HolderMesh } from "./holder-mesh"
-import { GestureParams, type NudgeKey } from "./gesture-params"
+import type { Params } from "@/lib/engine"
+import { EngineMesh } from "./engine-mesh"
+import { GestureParams, type NudgeAxis } from "./gesture-params"
 
 /**
  * Frame the piece whenever its size changes meaningfully: tall or wide
@@ -45,18 +45,18 @@ function FitCamera({ fit }: { fit: { r: number; cy: number } | null }) {
   return null
 }
 
-export function HolderViewer({
+export function Viewer({
   params,
   dark,
   hiDetail,
   mobile,
   onNudge,
 }: {
-  params: HolderParams
+  params: Params
   dark: boolean
   hiDetail: boolean
   mobile: boolean
-  onNudge: (key: NudgeKey, deltaPx: number) => void
+  onNudge: (axis: NudgeAxis, deltaPx: number) => void
 }) {
   const bg = dark ? "#000000" : "#ffffff"
   const shadow = hiDetail ? 2048 : 1024
@@ -97,7 +97,7 @@ export function HolderViewer({
 
       <Suspense fallback={null}>
         <group position={[0, -0.85, 0]}>
-          <HolderMesh
+          <EngineMesh
             params={params}
             hiDetail={hiDetail}
             mobile={mobile}

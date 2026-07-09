@@ -1,7 +1,7 @@
 {
-  "name": "Sculpture Studio — iverfinne.no",
-  "short_name": "Sculpture Studio",
-  "description": "An interactive 3D studio for generating endless parametric sculptures.",
+  "name": "Parametric Studio — iverfinne.no",
+  "short_name": "Parametric Studio",
+  "description": "An interactive studio for parametric 3D forms.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

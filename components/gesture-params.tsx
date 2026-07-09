@@ -4,20 +4,21 @@ import { useEffect } from "react"
 import * as THREE from "three"
 import { useThree } from "@react-three/fiber"
 
-export type NudgeKey = "height" | "spread"
+export type NudgeAxis = "vertical" | "horizontal"
 
 /**
  * Two-finger gestures on touch devices:
- *  - vertical two-finger scroll  → height
- *  - horizontal two-finger scroll → radius (spread)
+ *  - vertical two-finger scroll   → onNudge("vertical", px)
+ *  - horizontal two-finger scroll → onNudge("horizontal", px)
  *  - pinch → camera zoom (handled here, since OrbitControls is paused
  *    while two fingers are down)
- * One-finger rotate stays with OrbitControls.
+ * One-finger rotate stays with OrbitControls. What the nudge axes mean is
+ * up to the engine (lib/engine.ts NUDGE_PARAMS).
  */
 export function GestureParams({
   onNudge,
 }: {
-  onNudge: (key: NudgeKey, deltaPx: number) => void
+  onNudge: (axis: NudgeAxis, deltaPx: number) => void
 }) {
   const gl = useThree((s) => s.gl)
   const controls = useThree((s) => s.controls) as {
@@ -86,9 +87,9 @@ export function GestureParams({
           invalidate()
         }
       } else if (mode === "v") {
-        onNudge("height", -dy)
+        onNudge("vertical", -dy)
       } else {
-        onNudge("spread", dx)
+        onNudge("horizontal", dx)
       }
       last = c
     }
