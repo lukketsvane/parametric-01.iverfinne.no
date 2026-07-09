@@ -6,7 +6,7 @@ import { arraysToGeometry } from "./geometry"
 
 // STL exports are meshed once at high resolution regardless of the live
 // viewport quality, so downloads are always print-grade.
-const EXPORT_RES = 256
+const EXPORT_RES = 288
 
 /**
  * Build the current vessel, encode it as a binary STL in millimeters

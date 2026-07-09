@@ -4,17 +4,19 @@ import { useEffect, useRef } from "react"
 import * as THREE from "three"
 import { useThree } from "@react-three/fiber"
 import { PRESET_COLORS, type Params } from "@/lib/engine"
-import { buildVesselArrays } from "@/lib/vessel"
+import { buildVesselArrays, gridMetaFor } from "@/lib/vessel"
 import { arraysToGeometry } from "@/lib/geometry"
 import type { EngineJob, EngineResult } from "@/lib/engine-worker"
 
 // target grid cells along the largest axis — coarse while dragging,
-// refined once the parameters settle. Phones get a lighter refine so
-// regeneration never feels stuck.
-const PREVIEW_RES = 84
-const REFINE_RES_MOBILE = 132
-const REFINE_RES = 176
-const REFINE_RES_HI = 220
+// refined once the parameters settle. Refines are sampled by a fleet of
+// slab workers across every available core, so desktops can afford grids
+// fine enough for paper-thin sheets. Phones get a lighter, single-worker
+// refine so regeneration never feels stuck.
+const PREVIEW_RES = 96
+const REFINE_RES_MOBILE = 144
+const REFINE_RES = 240
+const REFINE_RES_HI = 300
 const REFINE_DELAY = 240
 
 const newWorker = () =>
@@ -36,14 +38,20 @@ export function EngineMesh({
 
   const genRef = useRef(0)
 
-  // two lanes: a persistent fast worker for previews, and a killable one
-  // for long refines — a stale refine is terminated instead of awaited, so
-  // switching presets or dragging never waits behind an old build
+  // two lanes: a persistent fast worker for previews, and a killable
+  // fleet for long refines — a stale refine is terminated instead of
+  // awaited, so switching presets or dragging never waits behind an old
+  // build
   const previewWorker = useRef<Worker | null>(null)
   const previewBusy = useRef(false)
   const previewPending = useRef<EngineJob | null>(null)
-  const refineWorker = useRef<Worker | null>(null)
+  const refineFleet = useRef<Worker[]>([])
   const workersDead = useRef(false)
+
+  const killRefine = () => {
+    for (const w of refineFleet.current) w.terminate()
+    refineFleet.current = []
+  }
 
   const swap = (geo: THREE.BufferGeometry) => {
     const mesh = meshRef.current
@@ -67,23 +75,23 @@ export function EngineMesh({
     invalidate()
   }
 
-  const applyResult = (e: MessageEvent<EngineResult>) => {
-    const { gen, positions, normals, indices } = e.data
-    if (gen === genRef.current) {
-      swap(arraysToGeometry({ positions, normals, indices }))
-    }
+  const applyMesh = (r: EngineResult) => {
+    if (r.kind !== "mesh" || r.gen !== genRef.current) return
+    const { positions, normals, indices } = r
+    swap(arraysToGeometry({ positions, normals, indices }))
   }
 
   const postPreview = (job: EngineJob) => {
     if (workersDead.current) {
-      swap(arraysToGeometry(buildVesselArrays(job.params, job.res)))
+      if (job.kind === "build")
+        swap(arraysToGeometry(buildVesselArrays(job.params, job.res)))
       return
     }
     if (!previewWorker.current) {
       try {
         const w = newWorker()
         w.onmessage = (e: MessageEvent<EngineResult>) => {
-          applyResult(e)
+          applyMesh(e.data)
           const pending = previewPending.current
           previewPending.current = null
           if (pending) w.postMessage(pending)
@@ -95,7 +103,8 @@ export function EngineMesh({
         previewWorker.current = w
       } catch {
         workersDead.current = true
-        swap(arraysToGeometry(buildVesselArrays(job.params, job.res)))
+        if (job.kind === "build")
+          swap(arraysToGeometry(buildVesselArrays(job.params, job.res)))
         return
       }
     }
@@ -107,40 +116,73 @@ export function EngineMesh({
     }
   }
 
-  const postRefine = (job: EngineJob) => {
+  /**
+   * High-res refine: split the grid into z-slabs, sample them on a fleet
+   * of workers in parallel (one per core), then hand the assembled field
+   * to one last worker for surface extraction.
+   */
+  const postRefine = (gen: number, params: Params, res: number) => {
     if (workersDead.current) return
-    // kill any in-flight refine — its result would be stale anyway
-    refineWorker.current?.terminate()
+    killRefine()
+    let meta
     try {
-      const w = newWorker()
-      w.onmessage = (e: MessageEvent<EngineResult>) => {
-        applyResult(e)
-        w.terminate()
-        if (refineWorker.current === w) refineWorker.current = null
-      }
-      w.onerror = () => {
-        w.terminate()
-        if (refineWorker.current === w) refineWorker.current = null
-      }
-      refineWorker.current = w
-      w.postMessage(job)
+      meta = gridMetaFor(params, res)
     } catch {
-      refineWorker.current = null
+      return
+    }
+    const cores = typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4
+    const lanes = Math.min(8, Math.max(1, cores - 1))
+    const chunk = Math.max(4, Math.ceil(meta.nz / lanes))
+    const jobs: { z0: number; z1: number }[] = []
+    for (let z0 = 0; z0 < meta.nz; z0 += chunk)
+      jobs.push({ z0, z1: Math.min(meta.nz, z0 + chunk) })
+
+    const slabs: { z0: number; field: Float32Array }[] = []
+    try {
+      for (const { z0, z1 } of jobs) {
+        const w = newWorker()
+        refineFleet.current.push(w)
+        w.onmessage = (e: MessageEvent<EngineResult>) => {
+          const r = e.data
+          if (r.kind !== "slab" || r.gen !== genRef.current) return
+          slabs.push({ z0: r.z0, field: r.field })
+          w.terminate()
+          if (slabs.length !== jobs.length) return
+          // all slabs in — mesh on one final worker
+          try {
+            const mw = newWorker()
+            refineFleet.current.push(mw)
+            mw.onmessage = (me: MessageEvent<EngineResult>) => {
+              applyMesh(me.data)
+              killRefine()
+            }
+            mw.onerror = () => killRefine()
+            const job: EngineJob = { kind: "mesh", gen, meta, slabs }
+            mw.postMessage(job, slabs.map((s) => s.field.buffer as ArrayBuffer))
+          } catch {
+            killRefine()
+          }
+        }
+        w.onerror = () => killRefine()
+        const job: EngineJob = { kind: "slab", gen, params, res, z0, z1 }
+        w.postMessage(job)
+      }
+    } catch {
+      killRefine()
     }
   }
 
   useEffect(() => {
     return () => {
       previewWorker.current?.terminate()
-      refineWorker.current?.terminate()
       previewWorker.current = null
-      refineWorker.current = null
+      killRefine()
     }
   }, [])
 
   useEffect(() => {
     const gen = ++genRef.current
-    postPreview({ gen, params, res: PREVIEW_RES })
+    postPreview({ kind: "build", gen, params, res: PREVIEW_RES })
     const refineRes = hiDetail
       ? REFINE_RES_HI
       : mobile
@@ -148,7 +190,7 @@ export function EngineMesh({
         : REFINE_RES
     const id = window.setTimeout(() => {
       if (gen === genRef.current) {
-        postRefine({ gen, params, res: refineRes })
+        postRefine(gen, params, refineRes)
       }
     }, REFINE_DELAY)
     return () => window.clearTimeout(id)
