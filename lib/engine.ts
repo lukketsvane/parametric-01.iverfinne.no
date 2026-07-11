@@ -294,17 +294,21 @@ export const ENGINES: readonly { id: string; label: string }[] = [
   { id: "vessel", label: "Vessel 01" },
 ]
 
-/** Body tint per family, matched to the reference pieces. */
+/**
+ * Body tint per family — never white: the reference prints are warm
+ * tan and terracotta PLA, clay-grey and dusty slate. Crevice shading
+ * (lib/vessel.ts buildVertexColors) grades these darker in the pockets.
+ */
 export const PRESET_COLORS: Record<string, string> = {
-  relikvie: "#f4f1e8",
-  sikksakk: "#f2efe6",
-  pagode: "#b8b0ac",
-  vaffel: "#8fb0cc",
-  turbin: "#eddcb4",
-  korall: "#f5f2ec",
-  blomst: "#f6f3ee",
-  lykt: "#d9c39e",
-  timeglas: "#f7f4ef",
+  relikvie: "#cbb896", // warm sand
+  sikksakk: "#e5b08c", // peach
+  pagode: "#a49c94", // warm clay-grey
+  vaffel: "#8aa5be", // dusty slate blue
+  turbin: "#c8a271", // tan
+  korall: "#b59d86", // greige
+  blomst: "#e3ac89", // soft coral
+  lykt: "#cfa87b", // light tan
+  timeglas: "#bf8a60", // terracotta
 }
 
 /** Which parameter each two-finger scroll axis nudges. */

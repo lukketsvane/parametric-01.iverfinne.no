@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
 import { useThree } from "@react-three/fiber"
-import { PRESET_COLORS, type Params } from "@/lib/engine"
+import type { Params } from "@/lib/engine"
 import { buildVesselArrays, gridMetaFor } from "@/lib/vessel"
 import { arraysToGeometry } from "@/lib/geometry"
 import type { EngineJob, EngineResult } from "@/lib/engine-worker"
@@ -77,8 +77,8 @@ export function EngineMesh({
 
   const applyMesh = (r: EngineResult) => {
     if (r.kind !== "mesh" || r.gen !== genRef.current) return
-    const { positions, normals, indices } = r
-    swap(arraysToGeometry({ positions, normals, indices }))
+    const { positions, normals, indices, colors } = r
+    swap(arraysToGeometry({ positions, normals, indices, colors }))
   }
 
   const postPreview = (job: EngineJob) => {
@@ -157,7 +157,7 @@ export function EngineMesh({
               killRefine()
             }
             mw.onerror = () => killRefine()
-            const job: EngineJob = { kind: "mesh", gen, meta, slabs }
+            const job: EngineJob = { kind: "mesh", gen, params, meta, slabs }
             mw.postMessage(job, slabs.map((s) => s.field.buffer as ArrayBuffer))
           } catch {
             killRefine()
@@ -202,13 +202,12 @@ export function EngineMesh({
     return () => mesh?.geometry?.dispose()
   }, [])
 
-  const tint = PRESET_COLORS[params.preset] ?? "#f3f0e9"
-
   return (
     <mesh ref={meshRef} castShadow receiveShadow>
-      {/* matte slip-cast body under a faint sheen, tinted per family */}
+      {/* matte clay body under a faint sheen; the color lives in the
+          crevice-graded vertex colors computed with the mesh */}
       <meshPhysicalMaterial
-        color={tint}
+        vertexColors
         roughness={0.62}
         metalness={0}
         clearcoat={0.25}

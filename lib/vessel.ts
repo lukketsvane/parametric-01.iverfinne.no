@@ -1,5 +1,5 @@
 import { marchGrid, type Grid } from "./marching-cubes"
-import type { Params } from "./engine"
+import { PRESET_COLORS, type Params } from "./engine"
 
 /**
  * The vessel motor: parameters → scalar field → watertight mesh.
@@ -40,6 +40,8 @@ export type VesselMeshArrays = {
   positions: Float32Array
   normals: Float32Array
   indices: Uint32Array
+  /** linear-space vertex colors, crevice-graded from the family tint */
+  colors: Float32Array
 }
 
 export type GridMeta = {
@@ -558,16 +560,82 @@ export function makeSampler(p: Params, res: number): Sampler {
 }
 
 /** Extract the surface from a fully assembled field. */
-export function meshField(meta: GridMeta, field: Float32Array): VesselMeshArrays {
+export function meshField(meta: GridMeta, field: Float32Array, p: Params): VesselMeshArrays {
   const grid: Grid = { ...meta, field }
   const { positions, indices } = marchGrid(grid)
-  return { positions, normals: buildNormals(positions, indices), indices }
+  const normals = buildNormals(positions, indices)
+  return { positions, normals, indices, colors: buildVertexColors(p, positions, normals) }
 }
 
 /** Single-threaded build: sample everything, then mesh. */
 export function buildVesselArrays(p: Params, res: number): VesselMeshArrays {
   const sampler = makeSampler(p, res)
-  return meshField(sampler.meta, sampler.fill(0, sampler.meta.nz))
+  return meshField(sampler.meta, sampler.fill(0, sampler.meta.nz), p)
+}
+
+/* --------------------------------- color ----------------------------------- */
+
+// sRGB component → linear
+function s2l(c: number): number {
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+}
+
+/**
+ * Geometry-guided color: the family tint, graded by where a point sits
+ * in the structure. Radial depth into the pockets (toward the core wall
+ * and the cavity) darkens like trapped shadow, undersides darken like
+ * self-occlusion, and the last stretch toward the rim lifts slightly —
+ * the way the reference prints and fired clay read. Subtle by design:
+ * the geometry guides the gradient, it never posterizes it.
+ */
+export function buildVertexColors(
+  p: Params,
+  positions: Float32Array,
+  normals: Float32Array,
+): Float32Array {
+  const H = p.height
+  const prof = buildProfileTable(p)
+  const coreLo = p.neckY - 0.08
+  const coreHi = p.neckY + 0.12
+  const reach =
+    Math.max(
+      p.fins > 0 ? p.finDepth : 0,
+      p.rings > 0 ? p.ringDepth : 0,
+      p.skin > 0 ? p.finDepth * 0.5 : 0,
+    ) +
+    p.flute +
+    0.04
+
+  const hex = PRESET_COLORS[p.preset] ?? "#c8b49a"
+  const n = Number.parseInt(hex.slice(1), 16)
+  const br = s2l(((n >> 16) & 255) / 255)
+  const bg = s2l(((n >> 8) & 255) / 255)
+  const bb = s2l((n & 255) / 255)
+  // pocket shadow: darker and a touch warmer — red survives, blue dies
+  const dr = br * 0.66
+  const dg = bg * 0.6
+  const db = bb * 0.52
+
+  const colors = new Float32Array(positions.length)
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i]
+    const y = positions[i + 1]
+    const z = positions[i + 2]
+    const rad = Math.hypot(x, z)
+    const h = Math.min(1, Math.max(0, y / H))
+    const R0 = sampleTable(prof, h)
+    const inner = R0 * (p.core + (1 - p.core) * smoothstep(coreLo, coreHi, h))
+    const outer = R0 + reach
+    let deep = 1 - (rad - inner) / Math.max(0.05, outer - inner)
+    deep = deep < 0 ? 0 : deep > 1 ? 1 : deep
+    const under = normals[i + 1] < 0 ? -normals[i + 1] : 0
+    const k = Math.min(1, deep * 0.75 + under * 0.3)
+    const lift = 0.96 + 0.1 * h
+    colors[i] = Math.min(1, (br + (dr - br) * k) * lift)
+    colors[i + 1] = Math.min(1, (bg + (dg - bg) * k) * lift)
+    colors[i + 2] = Math.min(1, (bb + (db - bb) * k) * lift)
+  }
+  return colors
 }
 
 /** Area-weighted smooth vertex normals — dense MC meshes shade well with these. */
