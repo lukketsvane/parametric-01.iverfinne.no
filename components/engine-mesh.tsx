@@ -14,9 +14,9 @@ import type { EngineJob, EngineResult } from "@/lib/engine-worker"
 // fine enough for paper-thin sheets. Phones get a lighter, single-worker
 // refine so regeneration never feels stuck.
 const PREVIEW_RES = 104
-const REFINE_RES_MOBILE = 152
-const REFINE_RES = 264
-const REFINE_RES_HI = 360
+const REFINE_RES_MOBILE = 164
+const REFINE_RES = 300
+const REFINE_RES_HI = 400
 const REFINE_DELAY = 240
 
 const newWorker = () =>
@@ -213,6 +213,9 @@ export function EngineMesh({
         metalness={0}
         clearcoat={0.25}
         clearcoatRoughness={0.6}
+        sheen={0.3}
+        sheenRoughness={0.55}
+        sheenColor="#ffffff"
         envMapIntensity={0.7}
       />
     </mesh>

@@ -9,10 +9,10 @@ import {
   Download,
 } from "lucide-react"
 import {
+  ENGINES,
   PARAM_RANGES,
   PRESETS,
   SECTIONS,
-  genParams,
   randomizeParams,
   randomSeed,
   type ParamKey,
@@ -128,16 +128,18 @@ export function ControlsPanel({
       <div className={`pointer-events-auto w-full max-w-md rounded-3xl border ${HAIR} bg-white dark:bg-black`}>
         {/* header row */}
         <div className="flex items-center gap-1.5 p-2.5">
+          {/* one entry per ENGINE — every design comes out of the same
+              motor; families are roamed by shuffle, not picked here */}
           <div className={`relative flex h-10 items-center rounded-full border ${HAIR}`}>
             <select
-              value={params.preset}
-              onChange={(e) => onChange(genParams(params.seed, e.target.value))}
-              aria-label="Preset"
+              value={ENGINES[0].id}
+              onChange={() => {}}
+              aria-label="Engine"
               className="h-full appearance-none rounded-full bg-transparent pl-3.5 pr-8 text-xs font-medium text-black outline-none dark:text-white [&>option]:bg-white dark:[&>option]:bg-black"
             >
-              {PRESETS.map((fam) => (
-                <option key={fam} value={fam}>
-                  {fam.charAt(0).toUpperCase() + fam.slice(1)}
+              {ENGINES.map((eng) => (
+                <option key={eng.id} value={eng.id}>
+                  {eng.label}
                 </option>
               ))}
             </select>
@@ -151,8 +153,8 @@ export function ControlsPanel({
             aria-pressed={presetLocked}
             title={
               presetLocked
-                ? "Type locked — shuffle stays in this preset"
-                : "Tap to lock the type against shuffle"
+                ? "Family locked — shuffle stays in this family"
+                : "Tap to lock the family against shuffle"
             }
             className={`px-1 text-[11px] tabular-nums tracking-widest text-black/60 transition-opacity dark:text-white/60 ${
               presetLocked ? "opacity-30" : ""

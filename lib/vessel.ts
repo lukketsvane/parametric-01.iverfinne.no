@@ -411,31 +411,40 @@ export function makeSampler(p: Params, res: number): Sampler {
           // shared edge displacement: ruffle waves, two octaves of tear,
           // and a micro fray octave — computed near free edges only. Tear
           // fades out above finTop so the mouth bowl stays smooth.
+          // low octave (broad bites) kept apart from high octaves (fine
+          // fray): both erode free-edge envelopes, but only the broad
+          // octave shapes top cuts — high-frequency fray across a grazing
+          // cut leaves combs of needle pins standing on flat collars
           let ruff = 0
-          let tear = 0
+          let tearLow = 0
+          let tearHigh = 0
           if (rad > Rc - 0.15 && (p.ruffle > 0 || tearAmp > 0 || microAmp > 0)) {
             if (p.ruffle > 0) ruff = p.ruffle * ruffleAt(theta, py)
             const tearW =
               p.finTop < 1 ? 1 - smoothstep(finTopY - 0.12, finTopY + 0.25, py) : 1
             if (tearAmp > 0) {
-              let t = vnoise3(px * noiseF, py * noiseF, pz * noiseF, seed) - tearMid
+              tearLow =
+                tearW *
+                tearAmp *
+                (vnoise3(px * noiseF, py * noiseF, pz * noiseF, seed) - 0.7)
               if (tear2 > 0.005)
-                t +=
+                tearHigh +=
+                  tearW *
+                  tearAmp *
                   tear2 *
-                  vnoise3(px * 2.6 * noiseF, py * 2.6 * noiseF, pz * 2.6 * noiseF, seed ^ 77)
-              tear += tearW * tearAmp * t
+                  (vnoise3(px * 2.6 * noiseF, py * 2.6 * noiseF, pz * 2.6 * noiseF, seed ^ 77) -
+                    0.5)
             }
             if (microAmp > 0)
-              tear +=
+              tearHigh +=
                 tearW *
                 microAmp *
                 (vnoise3(px * 24, py * 24, pz * 24, seed ^ 1234) - 0.5)
           }
-          const edgeN = ruff + tear
+          const edgeN = ruff + tearLow + tearHigh
 
-          // top edges tear by biting downward; upward excursions are damped
-          // so cuts grazing flat collars can't bead into rows of needle pins
-          const tearCut = tear > 0 ? tear * 0.25 : tear
+          // top edges bite downward; upward excursions are damped
+          const tearCut = tearLow > 0 ? tearLow * 0.15 : tearLow
           const topCut = H + rimWave + (ruff + tearCut) * 0.9
 
           // core: hollow solid of revolution, open mouth. The field is a

@@ -34,7 +34,7 @@ function FitCamera({ fit }: { fit: { r: number; cy: number } | null }) {
     controls.target.set(0, ty, 0)
     const dist = Math.min(
       15,
-      Math.max(3.2, (fit.r * 1.45) / Math.tan((16 * Math.PI) / 180)),
+      Math.max(3.2, (fit.r * 1.32) / Math.tan((16 * Math.PI) / 180)),
     )
     const dir = camera.position.clone().sub(controls.target)
     if (dir.lengthSq() < 1e-6) dir.set(2.6, 1.85, 6.6)
@@ -78,11 +78,12 @@ export function Viewer({
       <color attach="background" args={[bg]} />
       <fog attach="fog" args={[bg, 14, 34]} />
 
-      <ambientLight intensity={0.35} />
+      {/* no ambient wash — the softbox environment is the only fill, so
+          shadows stay deep and the pieces model dramatically */}
       <directionalLight
         key={shadow}
         position={[4, 7, 3]}
-        intensity={1.2}
+        intensity={1.4}
         castShadow
         shadow-mapSize={[shadow, shadow]}
         // paper-thin sheets self-shadow into speckle without a normal
@@ -112,14 +113,14 @@ export function Viewer({
             <>
               <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
                 <planeGeometry args={[60, 60]} />
-                <shadowMaterial transparent opacity={0.16} />
+                <shadowMaterial transparent opacity={0.34} />
               </mesh>
               <ContactShadows
                 key={shadowKey}
                 position={[0, 0.001, 0]}
-                opacity={0.28}
+                opacity={0.5}
                 scale={9}
-                blur={2.2}
+                blur={1.9}
                 far={2.6}
                 resolution={mobile ? 256 : 512}
                 frames={50}
