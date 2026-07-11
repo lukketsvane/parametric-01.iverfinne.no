@@ -59,7 +59,7 @@ export function Viewer({
   onNudge: (axis: NudgeAxis, deltaPx: number) => void
 }) {
   const bg = dark ? "#000000" : "#ffffff"
-  const shadow = hiDetail ? 2048 : 1024
+  const shadow = mobile ? 1024 : hiDetail ? 4096 : 2048
   // refresh the baked contact shadow once per parameter change
   const shadowSeq = useRef(0)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,7 +85,10 @@ export function Viewer({
         intensity={1.2}
         castShadow
         shadow-mapSize={[shadow, shadow]}
+        // paper-thin sheets self-shadow into speckle without a normal
+        // offset; bias alone can't fix acne on edge-on geometry
         shadow-bias={-0.0002}
+        shadow-normalBias={0.05}
         shadow-camera-left={-6}
         shadow-camera-right={6}
         shadow-camera-top={6}
