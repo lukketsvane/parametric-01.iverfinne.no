@@ -328,6 +328,7 @@ export function makeSampler(p: Params, res: number): Sampler {
     p.core + (1 - p.core) * smoothstep(coreLo, coreHi, h)
   const skinTop = p.skin * H
   const finTopY = p.finTop * H
+  const finLoY = Math.max(0, p.finLo) * H
   const mouthW = Math.round(p.mouthWave)
   const fluteN = Math.round(p.fluteN)
   const noiseF = 7
@@ -381,8 +382,12 @@ export function makeSampler(p: Params, res: number): Sampler {
         const h = py / H
         const R0 = sampleTable(prof, h)
         const cS = coreAt(h)
-        // pleats deepen toward the rim, like the thrown references
-        const fluteW = 0.5 * (1 + 1.2 * smoothstep(p.neckY, 1, h))
+        // pleats deepen toward the rim like the thrown references, or —
+        // with taper — window into almond lenses that vanish at both ends
+        const fluteW =
+          0.5 *
+          (1 + 1.2 * (1 - p.fluteTaper) * smoothstep(p.neckY, 1, h)) *
+          (1 - p.fluteTaper * (1 - Math.sin(Math.PI * Math.min(1, Math.max(0, h)))))
         const row = nx * (y + ny * (z - zA))
         const inBody = py > -0.02 && py < H + 0.14
         for (let x = 0; x < nx; x++) {
@@ -465,7 +470,7 @@ export function makeSampler(p: Params, res: number): Sampler {
           let dPlaneR = Infinity
           let bladeId = 0
           let bandId = 0
-          if (fins && py < finTopY + 0.3) {
+          if (fins && py < finTopY + 0.3 && py > finLoY - 0.35) {
             let thT = theta + twistRate * h
             if (p.chevron > 0) {
               // herringbone: blades shear sideways across each band,
@@ -510,13 +515,15 @@ export function makeSampler(p: Params, res: number): Sampler {
           }
 
           if (fins && dPlaneF < Infinity) {
-            // every blade carries its own depth signature
+            // every blade carries its own depth signature; a raised finLo
+            // floats the band on the wall, its lower edge torn like the top
             const dj = p.micro * 0.4 * (ih(bladeId, 17, 3, seed) - 0.5)
             const env = Rp + p.finDepth * (1 + dj) + edgeN + spike
+            const loCut = p.finLo > 0 ? finLoY - (ruff + tearCut) * 0.9 : 0
             const dFin = Math.max(
               dPlaneF - ft / 2,
               rad - env,
-              -py,
+              loCut - py,
               py - (finTopY + (ruff + tearCut) * 0.9 + (p.finTop >= 1 ? rimWave : 0)),
             )
             u = smin(u, dFin, 0.035)
