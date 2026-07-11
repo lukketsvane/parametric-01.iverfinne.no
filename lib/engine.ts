@@ -184,6 +184,10 @@ export const SECTIONS: {
  *    over, under a smooth fluted horn mouth
  *  - blomst:   small sphere of deep thin sails crowned by a big smooth
  *    petal bowl
+ *  - lykt:     tan lantern — smooth twisted sails sweeping from a fluted
+ *    crown down to a wide skirt, nothing torn anywhere
+ *  - timeglas: white hourglass — a deep-pleated horn flaring wide over
+ *    drooping skirts, petal-waved and torn along the rim
  */
 const BASE: Record<string, Record<ParamKey, number>> = {
   relikvie: {
@@ -227,8 +231,8 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     rough: 0.35, micro: 0.5,
   },
   turbin: {
-    height: 2.3, foot: 0.55, belly: 1.5, bellyY: 0.3, neck: 0.45, neckY: 0.68,
-    flare: 0.7, lip: 0.25,
+    height: 2.5, foot: 0.55, belly: 1.5, bellyY: 0.3, neck: 0.42, neckY: 0.72,
+    flare: 0.55, lip: 0.35,
     tiers: 2, tierDepth: 0.3, droop: 0.7,
     fins: 18, finDepth: 0.48, finThick: 0.032, twist: 0.05, chevron: 0, finTop: 1,
     rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.58,
@@ -256,9 +260,39 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     ruffle: 0.2, ruffleFreq: 6, mouthWave: 7, mouthAmp: 0.22, spikes: 0,
     rough: 0.5, micro: 0.7,
   },
+  lykt: {
+    height: 2.4, foot: 1.0, belly: 1.35, bellyY: 0.2, neck: 0.3, neckY: 0.88,
+    flare: 0.1, lip: 0.2,
+    tiers: 0, tierDepth: 0, droop: 0.2,
+    fins: 14, finDepth: 0.5, finThick: 0.035, twist: 0.35, chevron: 0, finTop: 1,
+    rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.45,
+    flute: 0.06, fluteN: 28, wall: 0.07, skin: 0,
+    ruffle: 0, ruffleFreq: 8, mouthWave: 0, mouthAmp: 0, spikes: 0,
+    rough: 0, micro: 0.08,
+  },
+  timeglas: {
+    height: 2.6, foot: 0.72, belly: 1.25, bellyY: 0.2, neck: 0.4, neckY: 0.52,
+    flare: 1.15, lip: 0.1,
+    tiers: 2, tierDepth: 0.28, droop: 0.65,
+    fins: 0, finDepth: 0.3, finThick: 0.03, twist: 0, chevron: 0, finTop: 1,
+    rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.95,
+    flute: 0.15, fluteN: 16, wall: 0.06, skin: 0,
+    ruffle: 0.15, ruffleFreq: 5, mouthWave: 5, mouthAmp: 0.12, spikes: 0,
+    rough: 0.68, micro: 0.5,
+  },
 }
 
 export const PRESETS: readonly string[] = Object.keys(BASE)
+
+/**
+ * The engines this studio can mount. The dropdown lists engines, not
+ * designs — every reference piece above comes out of the one vessel
+ * motor's parameter space (shuffle roams across them). Future motors
+ * append here.
+ */
+export const ENGINES: readonly { id: string; label: string }[] = [
+  { id: "vessel", label: "Vessel 01" },
+]
 
 /** Body tint per family, matched to the reference pieces. */
 export const PRESET_COLORS: Record<string, string> = {
@@ -269,6 +303,8 @@ export const PRESET_COLORS: Record<string, string> = {
   turbin: "#eddcb4",
   korall: "#f5f2ec",
   blomst: "#f6f3ee",
+  lykt: "#d9c39e",
+  timeglas: "#f7f4ef",
 }
 
 /** Which parameter each two-finger scroll axis nudges. */
