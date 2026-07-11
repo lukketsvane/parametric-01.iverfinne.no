@@ -41,6 +41,7 @@ export type ParamKey =
   | "twist"
   | "chevron"
   | "finTop"
+  | "finLo"
   // horizontal shelves
   | "rings"
   | "ringDepth"
@@ -49,6 +50,7 @@ export type ParamKey =
   | "core"
   | "flute"
   | "fluteN"
+  | "fluteTaper"
   | "wall"
   | "skin"
   // free edges
@@ -82,12 +84,14 @@ export const PARAM_RANGES: Record<ParamKey, ParamRange> = {
   twist: { min: -1, max: 1, step: 0.01 },
   chevron: { min: 0, max: 1, step: 0.01 },
   finTop: { min: 0.5, max: 1, step: 0.01 },
+  finLo: { min: 0, max: 0.6, step: 0.01 },
   rings: { min: 0, max: 20, step: 1 },
   ringDepth: { min: 0, max: 0.6, step: 0.01 },
   ringThick: { min: 0.01, max: 0.14, step: 0.005 },
   core: { min: 0.25, max: 1, step: 0.01 },
-  flute: { min: 0, max: 0.15, step: 0.005 },
+  flute: { min: 0, max: 0.2, step: 0.005 },
   fluteN: { min: 4, max: 64, step: 1 },
+  fluteTaper: { min: 0, max: 1, step: 0.01 },
   wall: { min: 0.035, max: 0.2, step: 0.005 },
   skin: { min: 0, max: 1, step: 0.01 },
   ruffle: { min: 0, max: 0.35, step: 0.01 },
@@ -134,6 +138,7 @@ export const SECTIONS: {
       { key: "twist", label: "Twist" },
       { key: "chevron", label: "Chevron" },
       { key: "finTop", label: "Stop at" },
+      { key: "finLo", label: "Start at" },
     ],
   },
   {
@@ -150,6 +155,7 @@ export const SECTIONS: {
       { key: "core", label: "Core" },
       { key: "flute", label: "Flutes" },
       { key: "fluteN", label: "Flute n" },
+      { key: "fluteTaper", label: "Taper" },
       { key: "wall", label: "Wall" },
       { key: "skin", label: "Skin" },
     ],
@@ -188,15 +194,21 @@ export const SECTIONS: {
  *    crown down to a wide skirt, nothing torn anywhere
  *  - timeglas: white hourglass — a deep-pleated horn flaring wide over
  *    drooping skirts, petal-waved and torn along the rim
+ *  - granat:   rust pod — wavy torn blades over a faceted ovoid, mouth
+ *    pinched nearly shut
+ *  - sokkel:   bone pedestal bowl — a torn fin ruff floating on the
+ *    upper drum of a smooth stem (fins start high: finLo)
+ *  - oliven:   sage planter — almond pleats tapering to points at both
+ *    ends of a squat drum (fluteTaper)
  */
 const BASE: Record<string, Record<ParamKey, number>> = {
   relikvie: {
     height: 4.1, foot: 0.95, belly: 1.02, bellyY: 0.5, neck: 0.42, neckY: 0.78,
     flare: 0.58, lip: 0.4,
     tiers: 0, tierDepth: 0, droop: 0.3,
-    fins: 12, finDepth: 0.3, finThick: 0.022, twist: 0, chevron: 0, finTop: 1,
+    fins: 12, finDepth: 0.3, finThick: 0.022, twist: 0, chevron: 0, finTop: 1, finLo: 0,
     rings: 12, ringDepth: 0.26, ringThick: 0.026, core: 0.52,
-    flute: 0.045, fluteN: 32, wall: 0.065, skin: 0.38,
+    flute: 0.045, fluteN: 32, fluteTaper: 0, wall: 0.065, skin: 0.38,
     ruffle: 0.03, ruffleFreq: 9, mouthWave: 0, mouthAmp: 0, spikes: 1,
     rough: 0.45, micro: 0.75,
   },
@@ -204,9 +216,9 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     height: 3.3, foot: 0.95, belly: 1.08, bellyY: 0.45, neck: 0.58, neckY: 0.82,
     flare: 0.5, lip: 0.3,
     tiers: 0, tierDepth: 0, droop: 0.2,
-    fins: 16, finDepth: 0.32, finThick: 0.018, twist: 0, chevron: 0.7, finTop: 0.84,
+    fins: 16, finDepth: 0.32, finThick: 0.018, twist: 0, chevron: 0.7, finTop: 0.84, finLo: 0,
     rings: 9, ringDepth: 0.22, ringThick: 0.018, core: 0.58,
-    flute: 0.03, fluteN: 28, wall: 0.05, skin: 0,
+    flute: 0.03, fluteN: 28, fluteTaper: 0, wall: 0.05, skin: 0,
     ruffle: 0.05, ruffleFreq: 12, mouthWave: 6, mouthAmp: 0.1, spikes: 0,
     rough: 0.7, micro: 0.8,
   },
@@ -214,9 +226,9 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     height: 3.3, foot: 0.5, belly: 1.18, bellyY: 0.3, neck: 0.34, neckY: 0.72,
     flare: 0.58, lip: 0.3,
     tiers: 4, tierDepth: 0.3, droop: 0.6,
-    fins: 34, finDepth: 0.11, finThick: 0.026, twist: 0, chevron: 0, finTop: 1,
+    fins: 34, finDepth: 0.11, finThick: 0.026, twist: 0, chevron: 0, finTop: 1, finLo: 0,
     rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.82,
-    flute: 0, fluteN: 24, wall: 0.06, skin: 0,
+    flute: 0, fluteN: 24, fluteTaper: 0, wall: 0.06, skin: 0,
     ruffle: 0.04, ruffleFreq: 15, mouthWave: 4, mouthAmp: 0.15, spikes: 0,
     rough: 0.5, micro: 0.55,
   },
@@ -224,9 +236,9 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     height: 2.9, foot: 0.5, belly: 1.02, bellyY: 0.42, neck: 0.3, neckY: 0.8,
     flare: 0.72, lip: 0.75,
     tiers: 0, tierDepth: 0, droop: 0.15,
-    fins: 12, finDepth: 0.22, finThick: 0.03, twist: 0, chevron: 0, finTop: 1,
+    fins: 12, finDepth: 0.22, finThick: 0.03, twist: 0, chevron: 0, finTop: 1, finLo: 0,
     rings: 8, ringDepth: 0.22, ringThick: 0.03, core: 0.85,
-    flute: 0.02, fluteN: 24, wall: 0.06, skin: 0,
+    flute: 0.02, fluteN: 24, fluteTaper: 0, wall: 0.06, skin: 0,
     ruffle: 0.03, ruffleFreq: 8, mouthWave: 4, mouthAmp: 0.2, spikes: 0.5,
     rough: 0.35, micro: 0.5,
   },
@@ -234,9 +246,9 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     height: 2.5, foot: 0.55, belly: 1.5, bellyY: 0.3, neck: 0.42, neckY: 0.72,
     flare: 0.55, lip: 0.35,
     tiers: 2, tierDepth: 0.3, droop: 0.7,
-    fins: 18, finDepth: 0.48, finThick: 0.032, twist: 0.05, chevron: 0, finTop: 1,
+    fins: 18, finDepth: 0.48, finThick: 0.032, twist: 0.05, chevron: 0, finTop: 1, finLo: 0,
     rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.58,
-    flute: 0.03, fluteN: 18, wall: 0.065, skin: 0,
+    flute: 0.03, fluteN: 18, fluteTaper: 0, wall: 0.065, skin: 0,
     ruffle: 0.07, ruffleFreq: 9, mouthWave: 0, mouthAmp: 0, spikes: 0,
     rough: 0.4, micro: 0.6,
   },
@@ -244,9 +256,9 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     height: 3.0, foot: 0.68, belly: 1.15, bellyY: 0.44, neck: 0.5, neckY: 0.7,
     flare: 1.0, lip: 0.6,
     tiers: 2, tierDepth: 0.15, droop: 0.6,
-    fins: 9, finDepth: 0.3, finThick: 0.02, twist: 0, chevron: 0, finTop: 0.78,
+    fins: 9, finDepth: 0.3, finThick: 0.02, twist: 0, chevron: 0, finTop: 0.78, finLo: 0,
     rings: 5, ringDepth: 0.26, ringThick: 0.02, core: 0.62,
-    flute: 0.05, fluteN: 18, wall: 0.05, skin: 0.1,
+    flute: 0.05, fluteN: 18, fluteTaper: 0, wall: 0.05, skin: 0.1,
     ruffle: 0.24, ruffleFreq: 7, mouthWave: 9, mouthAmp: 0.07, spikes: 0.15,
     rough: 0.6, micro: 0.75,
   },
@@ -254,9 +266,9 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     height: 2.2, foot: 0.35, belly: 1.15, bellyY: 0.52, neck: 0.6, neckY: 0.55,
     flare: 0.55, lip: 0.15,
     tiers: 0, tierDepth: 0, droop: 0.5,
-    fins: 12, finDepth: 0.55, finThick: 0.026, twist: 0, chevron: 0, finTop: 0.6,
+    fins: 12, finDepth: 0.55, finThick: 0.026, twist: 0, chevron: 0, finTop: 0.6, finLo: 0,
     rings: 2, ringDepth: 0.18, ringThick: 0.032, core: 0.5,
-    flute: 0.05, fluteN: 14, wall: 0.065, skin: 0,
+    flute: 0.05, fluteN: 14, fluteTaper: 0, wall: 0.065, skin: 0,
     ruffle: 0.2, ruffleFreq: 6, mouthWave: 7, mouthAmp: 0.22, spikes: 0,
     rough: 0.5, micro: 0.7,
   },
@@ -264,9 +276,9 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     height: 2.4, foot: 1.0, belly: 1.35, bellyY: 0.2, neck: 0.3, neckY: 0.88,
     flare: 0.1, lip: 0.2,
     tiers: 0, tierDepth: 0, droop: 0.2,
-    fins: 14, finDepth: 0.5, finThick: 0.035, twist: 0.35, chevron: 0, finTop: 1,
+    fins: 14, finDepth: 0.5, finThick: 0.035, twist: 0.35, chevron: 0, finTop: 1, finLo: 0,
     rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.45,
-    flute: 0.06, fluteN: 28, wall: 0.07, skin: 0,
+    flute: 0.06, fluteN: 28, fluteTaper: 0, wall: 0.07, skin: 0,
     ruffle: 0, ruffleFreq: 8, mouthWave: 0, mouthAmp: 0, spikes: 0,
     rough: 0, micro: 0.08,
   },
@@ -274,11 +286,41 @@ const BASE: Record<string, Record<ParamKey, number>> = {
     height: 2.6, foot: 0.72, belly: 1.25, bellyY: 0.2, neck: 0.4, neckY: 0.52,
     flare: 1.15, lip: 0.1,
     tiers: 2, tierDepth: 0.28, droop: 0.65,
-    fins: 0, finDepth: 0.3, finThick: 0.03, twist: 0, chevron: 0, finTop: 1,
+    fins: 0, finDepth: 0.3, finThick: 0.03, twist: 0, chevron: 0, finTop: 1, finLo: 0,
     rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.95,
-    flute: 0.15, fluteN: 16, wall: 0.06, skin: 0,
+    flute: 0.15, fluteN: 16, fluteTaper: 0, wall: 0.06, skin: 0,
     ruffle: 0.15, ruffleFreq: 5, mouthWave: 5, mouthAmp: 0.12, spikes: 0,
     rough: 0.68, micro: 0.5,
+  },
+  granat: {
+    height: 2.0, foot: 0.45, belly: 1.5, bellyY: 0.45, neck: 0.12, neckY: 0.8,
+    flare: 0.02, lip: 0.3,
+    tiers: 0, tierDepth: 0, droop: 0.3,
+    fins: 13, finDepth: 0.34, finThick: 0.03, twist: 0, chevron: 0, finTop: 1, finLo: 0,
+    rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.88,
+    flute: 0.09, fluteN: 13, fluteTaper: 0.55, wall: 0.07, skin: 0,
+    ruffle: 0.18, ruffleFreq: 4, mouthWave: 0, mouthAmp: 0, spikes: 0,
+    rough: 0.5, micro: 0.6,
+  },
+  sokkel: {
+    height: 2.1, foot: 0.6, belly: 0.64, bellyY: 0.3, neck: 0.88, neckY: 0.62,
+    flare: 0.1, lip: 0.15,
+    tiers: 0, tierDepth: 0, droop: 0.2,
+    fins: 26, finDepth: 0.16, finThick: 0.028, twist: 0, chevron: 0, finTop: 1, finLo: 0.6,
+    rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.97,
+    flute: 0.02, fluteN: 20, fluteTaper: 0, wall: 0.06, skin: 0,
+    ruffle: 0.14, ruffleFreq: 9, mouthWave: 0, mouthAmp: 0, spikes: 0,
+    rough: 0.6, micro: 0.7,
+  },
+  oliven: {
+    height: 1.9, foot: 0.75, belly: 1.35, bellyY: 0.5, neck: 0.72, neckY: 0.93,
+    flare: 0, lip: 0.2,
+    tiers: 0, tierDepth: 0, droop: 0.2,
+    fins: 0, finDepth: 0.3, finThick: 0.03, twist: 0, chevron: 0, finTop: 1, finLo: 0,
+    rings: 0, ringDepth: 0, ringThick: 0.03, core: 0.96,
+    flute: 0.2, fluteN: 18, fluteTaper: 0.85, wall: 0.06, skin: 0,
+    ruffle: 0, ruffleFreq: 8, mouthWave: 0, mouthAmp: 0, spikes: 0,
+    rough: 0, micro: 0.15,
   },
 }
 
@@ -309,6 +351,9 @@ export const PRESET_COLORS: Record<string, string> = {
   blomst: "#e3ac89", // soft coral
   lykt: "#cfa87b", // light tan
   timeglas: "#bf8a60", // terracotta
+  granat: "#b45a42", // rust red
+  sokkel: "#d8d2c6", // bone
+  oliven: "#99a273", // sage
 }
 
 /** Which parameter each two-finger scroll axis nudges. */
@@ -350,9 +395,9 @@ const JITTER: Record<ParamKey, number> = {
   neckY: 0.08, flare: 0.2, lip: 0.2,
   tiers: 1, tierDepth: 0.2, droop: 0.25,
   fins: 4, finDepth: 0.2, finThick: 0.08, twist: 0.15, chevron: 0.1,
-  finTop: 0.05,
+  finTop: 0.05, finLo: 0.05,
   rings: 2, ringDepth: 0.2, ringThick: 0.08,
-  core: 0.12, flute: 0.15, fluteN: 4, wall: 0.08, skin: 0.1,
+  core: 0.12, flute: 0.15, fluteN: 4, fluteTaper: 0.12, wall: 0.08, skin: 0.1,
   ruffle: 0.2, ruffleFreq: 3, mouthWave: 0, mouthAmp: 0.15, spikes: 0.2,
   rough: 0.2, micro: 0.15,
 }
@@ -376,7 +421,7 @@ export function randomizeParams(seed: number, preset: string): Params {
   }
   // structure that collapses to zero stays zero — it defines the family
   const base = BASE[p.preset]
-  for (const k of ["fins", "rings", "tiers", "skin", "spikes", "mouthAmp", "flute", "chevron"] as ParamKey[]) {
+  for (const k of ["fins", "rings", "tiers", "skin", "spikes", "mouthAmp", "flute", "chevron", "finLo", "fluteTaper"] as ParamKey[]) {
     if (base[k] === 0) p[k] = 0
   }
   if (base.finTop === 1) p.finTop = 1
