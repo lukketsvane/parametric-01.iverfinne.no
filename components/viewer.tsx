@@ -1,13 +1,8 @@
 "use client"
 
 import { Canvas, useThree } from "@react-three/fiber"
-import {
-  ContactShadows,
-  Environment,
-  Lightformer,
-  OrbitControls,
-} from "@react-three/drei"
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { Environment, Lightformer, OrbitControls } from "@react-three/drei"
+import { Suspense, useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import type { Params } from "@/lib/engine"
 import { EngineMesh } from "./engine-mesh"
@@ -60,10 +55,6 @@ export function Viewer({
 }) {
   const bg = dark ? "#000000" : "#ffffff"
   const shadow = mobile ? 1024 : hiDetail ? 4096 : 2048
-  // refresh the baked contact shadow once per parameter change
-  const shadowSeq = useRef(0)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const shadowKey = useMemo(() => ++shadowSeq.current, [params, dark])
   // measured size of the current mesh, reported after each rebuild
   const [fit, setFit] = useState<{ r: number; cy: number } | null>(null)
   return (
@@ -108,25 +99,13 @@ export function Viewer({
             onFit={(r, cy) => setFit({ r, cy })}
           />
           {/* ground: an invisible plane that only receives the cast shadow —
-              light mode only, dark mode floats the piece in the void */}
+              one hard directional shadow, no soft contact blob; light mode
+              only, dark mode floats the piece in the void */}
           {!dark && (
-            <>
-              <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-                <planeGeometry args={[60, 60]} />
-                <shadowMaterial transparent opacity={0.34} />
-              </mesh>
-              <ContactShadows
-                key={shadowKey}
-                position={[0, 0.001, 0]}
-                opacity={0.5}
-                scale={9}
-                blur={1.9}
-                far={2.6}
-                resolution={mobile ? 256 : 512}
-                frames={50}
-                color="#000000"
-              />
-            </>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <planeGeometry args={[60, 60]} />
+              <shadowMaterial transparent opacity={0.34} />
+            </mesh>
           )}
         </group>
         {/* local softbox studio — no remote HDR fetch */}
