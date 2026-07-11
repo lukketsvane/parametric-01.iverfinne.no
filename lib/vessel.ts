@@ -23,10 +23,13 @@ import type { Params } from "./engine"
  *      each blade and each shelf carries its own depth signature; fin ×
  *      shelf crossings grow thin blade spikes; mouths scallop into petals
  *
- * The parts are fused with smooth booleans and the interior cavity is
- * carved last (offset along the surface normal, so thin flared collars
- * keep their true wall thickness) — the result reads as one slip-cast
- * piece of paper-thin porcelain.
+ * The revolution surfaces are true 2D signed distances to their profile
+ * curves (precomputed per build, bilinearly sampled per voxel), so flared
+ * collars and skirt undersides mesh as cleanly as vertical walls. The
+ * parts are fused with smooth booleans and the interior cavity is carved
+ * last (offset along the surface normal, so thin flared collars keep
+ * their true wall thickness) — the result reads as one slip-cast piece of
+ * paper-thin porcelain.
  *
  * Sampling is splittable: makeSampler() exposes fill(z0, z1) so a fleet
  * of workers can compute grid slabs in parallel and meshField() extracts
@@ -111,13 +114,8 @@ function ease(a: number, b: number, t: number): number {
   return a + (b - a) * (0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t))))
 }
 
-/**
- * Rotation-symmetric part of the profile, sampled over h ∈ [0,1], plus a
- * slope factor per sample: s = cos(surface tilt), used to turn radial
- * differences into approximate true distances so near-horizontal parts
- * (flat collars, skirt undersides) keep their real thickness.
- */
-function buildProfileTable(p: Params, H: number): { R: Float32Array; S: Float32Array } {
+/** Rotation-symmetric profile radius, sampled over h ∈ [0,1]. */
+function buildProfileTable(p: Params): Float32Array {
   const R = new Float32Array(PROFILE_N + 1)
   const tierLo = 0.12
   const skirtPow = 1.2 + p.droop * 3
@@ -143,21 +141,99 @@ function buildProfileTable(p: Params, H: number): { R: Float32Array; S: Float32A
     }
     R[i] = r
   }
-  const S = new Float32Array(PROFILE_N + 1)
-  for (let i = 0; i <= PROFILE_N; i++) {
-    const a = R[Math.max(0, i - 1)]
-    const b = R[Math.min(PROFILE_N, i + 1)]
-    const dRdy = (b - a) / (((2 / PROFILE_N) * H) || 1)
-    // clamp: dead-flat spots would flatten the field's gradient entirely
-    S[i] = Math.max(0.3, 1 / Math.hypot(1, dRdy))
-  }
-  return { R, S }
+  return R
 }
 
 function sampleTable(tab: Float32Array, h: number): number {
   const x = Math.min(1, Math.max(0, h)) * PROFILE_N
   const i = Math.min(PROFILE_N - 1, Math.floor(x))
   return tab[i] + (tab[i + 1] - tab[i]) * (x - i)
+}
+
+/**
+ * True signed distance to a profile curve r = C(y), precomputed on a small
+ * (r, y) grid and bilinearly sampled per voxel. Radial-only distances
+ * (scaled by a slope factor) used to terrace wherever the profile turned
+ * near-horizontal — flared collars, skirt undersides — because the field
+ * stopped being linear across a cell. A genuine distance keeps |∇field| ≈ 1
+ * everywhere, so marching cubes lands vertices sub-cell-accurately and
+ * offset surfaces (the cavity wall) keep their exact thickness.
+ * Distances are clamped to ±band; only a band this wide is ever compared
+ * against, so the scan stays cheap.
+ */
+type CurveSDF = {
+  d: Float32Array
+  nr: number
+  ny: number
+  y0: number
+  cell: number
+}
+
+function buildCurveSDF(
+  curve: Float32Array,
+  H: number,
+  y0: number,
+  y1: number,
+  rMax: number,
+  tCell: number,
+  band: number,
+): CurveSDF {
+  const nr = Math.ceil(rMax / tCell) + 2
+  const ny = Math.ceil((y1 - y0) / tCell) + 2
+  const d = new Float32Array(nr * ny).fill(band)
+  const segH = H / PROFILE_N
+  for (let j = 0; j < ny; j++) {
+    const py = y0 + j * tCell
+    const row = j * nr
+    // walk segments outward from the row's own height; beyond ±band
+    // vertically no segment can improve any cell of this row
+    const i0 = Math.min(PROFILE_N - 1, Math.max(0, Math.floor(py / segH)))
+    for (let dir = -1; dir <= 1; dir += 2) {
+      for (let i = dir < 0 ? i0 : i0 + 1; i >= 0 && i < PROFILE_N; i += dir) {
+        const ya = i * segH
+        const vd = py < ya ? ya - py : py > ya + segH ? py - ya - segH : 0
+        if (vd >= band) break
+        const ra = curve[i]
+        const rb = curve[i + 1]
+        const ex = rb - ra
+        const len2 = ex * ex + segH * segH
+        const kLo = Math.max(0, Math.floor((Math.min(ra, rb) - band) / tCell))
+        const kHi = Math.min(nr - 1, Math.ceil((Math.max(ra, rb) + band) / tCell))
+        for (let k = kLo; k <= kHi; k++) {
+          const r = k * tCell
+          let t = ((r - ra) * ex + (py - ya) * segH) / len2
+          t = t < 0 ? 0 : t > 1 ? 1 : t
+          const dx = r - (ra + ex * t)
+          const dy = py - (ya + segH * t)
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist < d[row + k]) d[row + k] = dist
+        }
+      }
+    }
+    // sign: the profile is single-valued in y, so inside ⇔ r < C(y)
+    const rC = sampleTable(curve, py / H)
+    const kIn = Math.min(nr, Math.max(0, Math.ceil(rC / tCell)))
+    for (let k = 0; k < kIn; k++) d[row + k] = -d[row + k]
+  }
+  return { d, nr, ny, y0, cell: tCell }
+}
+
+function sampleSDF(s: CurveSDF, r: number, y: number): number {
+  let fx = (r > 0 ? r : 0) / s.cell
+  let fy = (y - s.y0) / s.cell
+  const mx = s.nr - 1.001
+  const my = s.ny - 1.001
+  fx = fx < 0 ? 0 : fx > mx ? mx : fx
+  fy = fy < 0 ? 0 : fy > my ? my : fy
+  const ix = fx | 0
+  const iy = fy | 0
+  const tx = fx - ix
+  const ty = fy - iy
+  const i0 = iy * s.nr + ix
+  const d = s.d
+  const a = d[i0] + (d[i0 + 1] - d[i0]) * tx
+  const b = d[i0 + s.nr] + (d[i0 + s.nr + 1] - d[i0 + s.nr]) * tx
+  return a + (b - a) * ty
 }
 
 /* --------------------------------- field ----------------------------------- */
@@ -188,7 +264,7 @@ export function makeSampler(p: Params, res: number): Sampler {
   const H = p.height
   const seed = (p.seed | 0) || 1
 
-  const { R: prof, S: slope } = buildProfileTable(p, H)
+  const prof = buildProfileTable(p)
   let maxProf = 0
   for (let i = 0; i <= PROFILE_N; i++) maxProf = Math.max(maxProf, prof[i])
 
@@ -197,7 +273,7 @@ export function makeSampler(p: Params, res: number): Sampler {
 
   const maxOut =
     maxProf +
-    p.flute +
+    1.1 * p.flute +
     Math.max(
       fins ? p.finDepth : 0,
       rings ? p.ringDepth : 0,
@@ -205,7 +281,7 @@ export function makeSampler(p: Params, res: number): Sampler {
     ) +
     p.ruffle +
     p.mouthAmp +
-    0.26 * p.spikes +
+    0.45 * p.spikes +
     0.1
 
   const spanXZ = 2 * maxOut + 0.12
@@ -219,9 +295,11 @@ export function makeSampler(p: Params, res: number): Sampler {
   const oz = (-(nz - 1) * cell) / 2
   const meta: GridMeta = { nx, ny, nz, ox, oy, oz, cell }
 
-  // the thinnest structure the grid can carry without tearing open
-  const ft = Math.max(p.finThick, cell * 1.6)
-  const rt = Math.max(p.ringThick, cell * 1.6)
+  // the thinnest structure the grid can carry without artifacts: below
+  // ~2 cells both faces of a sheet share cells and marching cubes welds
+  // them into diagonal corduroy; true paper thickness returns on fine grids
+  const ft = Math.max(p.finThick, cell * 2.2)
+  const rt = Math.max(p.ringThick, cell * 2.2)
   const shellT = Math.max(0.05, ft * 1.2)
   const wall = Math.max(p.wall, cell * 2.2)
   const floorT = Math.max(0.09, wall * 1.2)
@@ -244,13 +322,37 @@ export function makeSampler(p: Params, res: number): Sampler {
   const bandStep = rings ? ringStep : H / 9
   const coreLo = p.neckY - 0.08
   const coreHi = p.neckY + 0.12
+  const coreAt = (h: number) =>
+    p.core + (1 - p.core) * smoothstep(coreLo, coreHi, h)
   const skinTop = p.skin * H
   const finTopY = p.finTop * H
   const mouthW = Math.round(p.mouthWave)
   const fluteN = Math.round(p.fluteN)
   const noiseF = 7
   const tearAmp = p.rough * 0.1
-  const microAmp = p.micro * 0.024
+  // noise the grid cannot resolve fades out instead of aliasing into
+  // speckle; the full fray comes back as the grid gets finer
+  const blimit = (freq: number) => smoothstep(2, 4, 1 / (freq * cell))
+  const tear2 = 0.5 * blimit(noiseF * 2.6)
+  const tearMid = 0.7 + 0.5 * tear2 // keeps the tear's net erosion constant
+  const microAmp = p.micro * 0.024 * blimit(24)
+
+  // true signed-distance tables for the two revolution curves, built
+  // lazily so meta-only calls (gridMetaFor) stay free
+  let tables: { core: CurveSDF; prof: CurveSDF | null } | null = null
+  const buildTables = () => {
+    const coreCurve = new Float32Array(PROFILE_N + 1)
+    for (let i = 0; i <= PROFILE_N; i++)
+      coreCurve[i] = prof[i] * coreAt(i / PROFILE_N)
+    const y0 = oy - 0.02
+    const y1 = oy + (ny - 1) * cell + 0.02
+    const rT = maxOut + 0.06
+    const tCell = cell * 0.8
+    return {
+      core: buildCurveSDF(coreCurve, H, y0, y1, rT, tCell, 0.6),
+      prof: p.skin > 0 ? buildCurveSDF(prof, H, y0, y1, rT, tCell, 0.6) : null,
+    }
+  }
 
   // trig per vertical column, reused across every y
   const radCol = new Float32Array(nx * nz)
@@ -265,6 +367,9 @@ export function makeSampler(p: Params, res: number): Sampler {
   }
 
   const fill = (zA: number, zB: number): Float32Array => {
+    if (!tables) tables = buildTables()
+    const sdfC = tables.core
+    const sdfP = tables.prof
     const field = new Float32Array(nx * ny * (zB - zA))
 
     for (let z = zA; z < zB; z++) {
@@ -273,7 +378,9 @@ export function makeSampler(p: Params, res: number): Sampler {
         const py = oy + y * cell
         const h = py / H
         const R0 = sampleTable(prof, h)
-        const s = sampleTable(slope, h)
+        const cS = coreAt(h)
+        // pleats deepen toward the rim, like the thrown references
+        const fluteW = 0.5 * (1 + 1.2 * smoothstep(p.neckY, 1, h))
         const row = nx * (y + ny * (z - zA))
         const inBody = py > -0.02 && py < H + 0.14
         for (let x = 0; x < nx; x++) {
@@ -289,7 +396,7 @@ export function makeSampler(p: Params, res: number): Sampler {
           // θ-dependent profile: corrugated flute walls everywhere,
           // squared/waved petal mouths growing above the neck
           let Rp = R0
-          if (p.flute > 0) Rp += p.flute * Math.cos(fluteN * theta) * 0.5
+          if (p.flute > 0) Rp += p.flute * Math.cos(fluteN * theta) * fluteW
           let rimWave = 0
           if (mouthW > 0 && p.mouthAmp > 0 && h > p.neckY) {
             const wgt = smoothstep(p.neckY, 1, h)
@@ -299,40 +406,44 @@ export function makeSampler(p: Params, res: number): Sampler {
             rimWave = p.mouthAmp * 0.8 * Math.cos(mouthW * theta + 0.9)
           }
 
-          const coreS = p.core + (1 - p.core) * smoothstep(coreLo, coreHi, h)
-          const Rc = Rp * coreS
+          const Rc = Rp * cS
 
           // shared edge displacement: ruffle waves, two octaves of tear,
           // and a micro fray octave — computed near free edges only. Tear
           // fades out above finTop so the mouth bowl stays smooth.
-          let edgeN = 0
+          let ruff = 0
+          let tear = 0
           if (rad > Rc - 0.15 && (p.ruffle > 0 || tearAmp > 0 || microAmp > 0)) {
-            if (p.ruffle > 0) edgeN += p.ruffle * ruffleAt(theta, py)
+            if (p.ruffle > 0) ruff = p.ruffle * ruffleAt(theta, py)
             const tearW =
               p.finTop < 1 ? 1 - smoothstep(finTopY - 0.12, finTopY + 0.25, py) : 1
-            if (tearAmp > 0)
-              edgeN +=
-                tearW *
-                tearAmp *
-                (vnoise3(px * noiseF, py * noiseF, pz * noiseF, seed) +
-                  0.5 *
-                    vnoise3(px * 2.6 * noiseF, py * 2.6 * noiseF, pz * 2.6 * noiseF, seed ^ 77) -
-                  0.95)
+            if (tearAmp > 0) {
+              let t = vnoise3(px * noiseF, py * noiseF, pz * noiseF, seed) - tearMid
+              if (tear2 > 0.005)
+                t +=
+                  tear2 *
+                  vnoise3(px * 2.6 * noiseF, py * 2.6 * noiseF, pz * 2.6 * noiseF, seed ^ 77)
+              tear += tearW * tearAmp * t
+            }
             if (microAmp > 0)
-              edgeN +=
+              tear +=
                 tearW *
                 microAmp *
                 (vnoise3(px * 24, py * 24, pz * 24, seed ^ 1234) - 0.5)
           }
+          const edgeN = ruff + tear
 
-          // every top edge tears/scallops instead of ending in a flat cut
-          const topCut = H + rimWave + edgeN * 0.9
+          // top edges tear by biting downward; upward excursions are damped
+          // so cuts grazing flat collars can't bead into rows of needle pins
+          const tearCut = tear > 0 ? tear * 0.25 : tear
+          const topCut = H + rimWave + (ruff + tearCut) * 0.9
 
-          // core: hollow solid of revolution, open mouth. Radial
-          // differences are scaled by the profile slope so flat collars
-          // measure ~true distance, and the cavity is the same surface
+          // core: hollow solid of revolution, open mouth. The field is a
+          // true 2D distance to the profile curve (θ-shifted for flutes
+          // and petals), so flat collars and skirt undersides mesh as
+          // cleanly as vertical walls, and the cavity is the same surface
           // offset inward along its normal — walls stay walls.
-          const fCore = (rad - Rc) * s
+          const fCore = sampleSDF(sdfC, rad - (Rp - R0) * cS, py)
           const dCore = Math.max(fCore, -py, py - topCut)
           const dCav = Math.max(fCore + wall, floorT - py)
 
@@ -347,11 +458,13 @@ export function makeSampler(p: Params, res: number): Sampler {
             let thT = theta + twistRate * h
             if (p.chevron > 0) {
               // herringbone: blades shear sideways across each band,
-              // alternating direction band to band
+              // alternating direction band to band; at full chevron the
+              // tips overrun half the fin spacing so neighboring blades
+              // fuse into continuous zigzag ribbons
               const uB = (py - ringLo * H) / bandStep
               const bi = Math.floor(uB)
               const bf = uB - bi
-              thT += p.chevron * 0.55 * W * (2 * bf - 1) * (bi & 1 ? 1 : -1)
+              thT += Math.min(0.5, p.chevron * 0.75) * W * (2 * bf - 1) * (bi & 1 ? 1 : -1)
               bandId = bi
             }
             const k = Math.round(thT / W)
@@ -360,12 +473,15 @@ export function makeSampler(p: Params, res: number): Sampler {
             bladeId = k
           }
           if (rings) {
-            // shelves drape: their plane undulates vertically with droop
+            // shelves drape two ways, like the slip-cast references: they
+            // undulate around the axis with droop, and they sag into
+            // hanging cones toward their free edge
             const drape =
-              p.droop > 0 && p.ruffle > 0
-                ? p.droop * p.ruffle * 0.9 * ruffleAt(theta + 2.1, py * 0.37 + 5)
+              p.droop > 0
+                ? p.droop * (0.04 + 0.45 * p.ruffle) * ruffleAt(theta + 2.1, py * 0.37 + 5)
                 : 0
-            const yy = py - ringLo * H + drape
+            const sag = rad > Rc ? p.droop * 0.35 * (rad - Rc) : 0
+            const yy = py - ringLo * H + drape + sag
             if (yy > -ringStep && yy < (ringHi - ringLo) * H + ringStep) {
               const m = ((yy % ringStep) + ringStep) % ringStep - ringStep / 2
               dPlaneR = Math.abs(m)
@@ -373,12 +489,13 @@ export function makeSampler(p: Params, res: number): Sampler {
             }
           }
 
-          // thin blade spikes where fins cross shelves
+          // thin blade spikes where fins cross shelves — long enough to
+          // read as blades, like the reference column's spine
           let spike = 0
-          if (p.spikes > 0 && fins && rings && dPlaneF < 0.13 && dPlaneR < 0.13) {
-            const sF = 1 - dPlaneF / 0.13
-            const sR = 1 - dPlaneR / 0.13
-            spike = p.spikes * 0.3 * Math.pow(sF * sR, 2)
+          if (p.spikes > 0 && fins && rings && dPlaneF < 0.15 && dPlaneR < 0.15) {
+            const sF = 1 - dPlaneF / 0.15
+            const sR = 1 - dPlaneR / 0.15
+            spike = p.spikes * 0.42 * Math.pow(sF * sR, 1.6)
           }
 
           if (fins && dPlaneF < Infinity) {
@@ -389,7 +506,7 @@ export function makeSampler(p: Params, res: number): Sampler {
               dPlaneF - ft / 2,
               rad - env,
               -py,
-              py - (finTopY + edgeN * 0.9 + (p.finTop >= 1 ? rimWave : 0)),
+              py - (finTopY + (ruff + tearCut) * 0.9 + (p.finTop >= 1 ? rimWave : 0)),
             )
             u = smin(u, dFin, 0.035)
           }
@@ -407,12 +524,13 @@ export function makeSampler(p: Params, res: number): Sampler {
             u = smin(u, dRing, 0.035)
           }
 
-          // solid outer skin over the lower body, torn along its top edge
-          if (p.skin > 0) {
-            const mid = Rp + p.finDepth * 0.5
+          // solid outer skin over the lower body, torn along its top edge —
+          // a true offset of the profile, so it drapes skirt undersides too
+          if (sdfP) {
             const cutY = skinTop * (1 + 0.9 * edgeN)
             const dSkin = Math.max(
-              Math.abs(rad - mid) - shellT / 2,
+              Math.abs(sampleSDF(sdfP, rad - (Rp - R0), py) - p.finDepth * 0.5) -
+                shellT / 2,
               py - cutY,
               0.02 - py,
             )
